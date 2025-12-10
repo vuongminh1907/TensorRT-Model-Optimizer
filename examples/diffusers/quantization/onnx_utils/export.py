@@ -385,7 +385,7 @@ def save_onnx(onnx_model, output):
     print(f"ONNX model saved to {output}")
 
 
-def modelopt_export_sd(backbone, onnx_dir, model_name, precision):
+def modelopt_export_sd(backbone, onnx_dir, model_name, precision, use_flux_controlnet=False):
     model_file_name = "model.onnx"
     os.makedirs(f"{onnx_dir}", exist_ok=True)
     tmp_subfolder = tempfile.mkdtemp(prefix="myapp_")
@@ -399,6 +399,29 @@ def modelopt_export_sd(backbone, onnx_dir, model_name, precision):
     dummy_inputs, dynamic_axes, _ = generate_dummy_inputs_and_dynamic_axes_and_shapes(
         model_name, backbone
     )
+
+    if use_flux_controlnet:
+        latent_dim_new = 32    # Use lower for controlnet export
+
+        # Update dummy inputs to use lower latent dimension
+        dummy_inputs[0]["hidden_states"] = dummy_inputs[0]["hidden_states"][:, :latent_dim_new, :]
+        dummy_inputs[0]["img_ids"] = dummy_inputs[0]["img_ids"][:latent_dim_new, :]
+
+        dummy_inputs[0]["controlnet_block_samples"] = torch.randn(
+            4, 1, latent_dim_new, 3072, 
+            device="cuda", 
+            dtype=torch.bfloat16
+        )
+
+        dummy_inputs[0]["controlnet_single_block_samples"] = torch.randn(
+            10, 1, latent_dim_new, 3072, 
+            device="cuda", 
+            dtype=torch.bfloat16
+        )
+
+        # Update dynamic axes to include controlnet
+        dynamic_axes["controlnet_block_samples"] = {2: "latent_dim"}
+        dynamic_axes["controlnet_single_block_samples"] = {2: "latent_dim"}
 
     if model_name in ["sdxl-1.0", "sdxl-turbo"]:
         input_names = ["sample", "timestep", "encoder_hidden_states", "text_embeds", "time_ids"]
@@ -417,6 +440,9 @@ def modelopt_export_sd(backbone, onnx_dir, model_name, precision):
         ]
         if model_name == "flux-dev":
             input_names.append("guidance")
+        if use_flux_controlnet:
+            input_names.append("controlnet_block_samples")
+            input_names.append("controlnet_single_block_samples")
         output_names = ["latent"]
     elif model_name in ["ltx-video-dev"]:
         input_names = [
@@ -433,6 +459,13 @@ def modelopt_export_sd(backbone, onnx_dir, model_name, precision):
     do_constant_folding = True
     opset_version = 20
 
+    print("Debuggg =================================")
+    print("dummy_inputs", dummy_inputs)
+    print("dynamic_axes", dynamic_axes)
+    print("input_names", input_names)
+    print("output_names", output_names)
+    print("==========================================")
+
     with quantizer_context, torch.inference_mode():
         onnx_export(
             backbone,
@@ -443,6 +476,7 @@ def modelopt_export_sd(backbone, onnx_dir, model_name, precision):
             dynamic_axes=dynamic_axes,
             do_constant_folding=do_constant_folding,
             opset_version=opset_version,
+            dynamo=False,
         )
     print(f"Saved at {tmp_output}")
     onnx_model = onnx.load(str(tmp_output), load_external_data=True)

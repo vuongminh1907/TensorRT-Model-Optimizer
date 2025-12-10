@@ -723,7 +723,7 @@ class ExportManager:
         with torch.no_grad():
             self.logger.info("Exporting to ONNX...")
             modelopt_export_sd(
-                backbone, str(self.config.onnx_dir), model_type.value, quant_format.value
+                backbone, str(self.config.onnx_dir), model_type.value, quant_format.value, use_flux_controlnet=True
             )
 
         self.logger.info("ONNX export completed successfully")

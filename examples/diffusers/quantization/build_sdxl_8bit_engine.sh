@@ -46,16 +46,17 @@ fi
 echo "current folder at $PWD"
 
 # Configurations for quantization
-model="sdxl-1.0"
+model="flux-dev"
 
 
 cleaned_m="${model//\//-}"
 curt_exp="${cleaned_m}_${format}"
 echo "=====>Processing $curt_exp"
 if [ "$format" == "fp8" ]; then
-    python quantize.py --model "$model" --format "$format" --batch-size 2 --calib-size 128 --n-steps 20 --quantized-torch-ckpt-save-path "$curt_exp".pt --collect-method default --onnx-dir "$curt_exp".onnx
+    python quantize.py --model "$model" --format "$format" --batch-size 1 --calib-size 512 --n-steps 20 --quantized-torch-ckpt-save-path "$curt_exp".pt --collect-method default --onnx-dir "$curt_exp".onnx --trt-high-precision-dtype BFloat16 --model-dtype BFloat16 --override-model-path Cantina/Flux-dedistill-v4-RealisticSkin0.5
 else
-    python quantize.py --model "$model" --format "$format" --batch-size 2 --calib-size 32 --collect-method "min-mean" --percentile 1.0 --alpha 0.8 --n-steps 20 --quantized-torch-ckpt-save-path "$curt_exp".pt --onnx-dir "$curt_exp".onnx
+    python quantize.py --model "$model" --format "$format" --batch-size 1 --calib-size 512 --collect-method "min-mean" --percentile 1.0 --alpha 0.8 --n-steps 20 --quantized-torch-ckpt-save-path "$curt_exp".pt --onnx-dir "$curt_exp".onnx --override-model-path Cantina/flux1-dedistilled-v3-lora-lite --trt-high-precision-dtype BFloat16 --model-dtype BFloat16 --quant-algo smoothquant
+    # python quantize.py --model "$model" --format "$format" --batch-size 1 --calib-size 2 --collect-method "min-mean" --percentile 1.0 --alpha 0.8 --n-steps 20 --quantized-torch-ckpt-save-path "$curt_exp".pt --onnx-dir "$curt_exp".onnx --override-model-path Cantina/flux.1-dev-realistic-lora-merge --trt-high-precision-dtype BFloat16 --model-dtype BFloat16 --quant-algo smoothquant
 fi
 
 echo "=====>Exported to ONNX model."
